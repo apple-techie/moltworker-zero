@@ -1,0 +1,145 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+  check-e2e-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      available: ${{ steps.check.outputs.available }}
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.E2E_CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "available=true" >> $GITHUB_OUTPUT
+          else
+            echo "available=false" >> $GITHUB_OUTPUT
+          fi
+
+  e2e:
+    needs: check-e2e-secrets
+    if: needs.check-e2e-secrets.outputs.available == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - name: base
+            env: {}
+          - name: telegram
+            env:
+              TELEGRAM_BOT_TOKEN: "fake-telegram-bot-token-for-e2e"
+              TELEGRAM_DM_POLICY: "pairing"
+          - name: discord
+            env:
+              DISCORD_BOT_TOKEN: "fake-discord-bot-token-for-e2e"
+              DISCORD_DM_POLICY: "pairing"
+          - name: workers-ai
+            env:
+              CF_AI_GATEWAY_MODEL: "workers-ai/@cf/openai/gpt-oss-120b"
+
+    name: e2e (${{ matrix.config.name }})
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Install system dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bc
+
+      - name: Install cctr
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cctr
+
+      - name: Install plwr
+        uses: taiki-e/install-action@v2
+        with:
+          tool: plwr@0.7.2
+
+      - name: Install Playwright browsers
+        run: npm install -g playwright && npx playwright install --with-deps chromium
+
+      - name: Run E2E tests (${{ matrix.config.name }})
+        id: e2e
+        continue-on-error: true
+        env:
+          # Cloud infrastructure credentials (from repo secrets with E2E_ prefix)
+          CLOUDFLARE_API_TOKEN: ${{ secrets.E2E_CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.E2E_CF_ACCOUNT_ID }}
+          WORKERS_SUBDOMAIN: ${{ secrets.E2E_WORKERS_SUBDOMAIN }}
+          CF_ACCESS_TEAM_DOMAIN: ${{ secrets.E2E_CF_ACCESS_TEAM_DOMAIN }}
+          R2_ACCESS_KEY_ID: ${{ secrets.E2E_R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.E2E_R2_SECRET_ACCESS_KEY }}
+          # AI provider — Cloudflare AI Gateway (preferred)
+          CLOUDFLARE_AI_GATEWAY_API_KEY: ${{ secrets.CLOUDFLARE_AI_GATEWAY_API_KEY }}
+          CF_AI_GATEWAY_ACCOUNT_ID: ${{ secrets.CF_AI_GATEWAY_ACCOUNT_ID }}
+          CF_AI_GATEWAY_GATEWAY_ID: ${{ secrets.CF_AI_GATEWAY_GATEWAY_ID }}
+          # AI provider — legacy (still supported)
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+          AI_GATEWAY_BASE_URL: ${{ secrets.AI_GATEWAY_BASE_URL }}
+          # Unique test run ID for parallel isolation
+          E2E_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.config.name }}
+          # Matrix-specific config
+          TELEGRAM_BOT_TOKEN: ${{ matrix.config.env.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_DM_POLICY: ${{ matrix.config.env.TELEGRAM_DM_POLICY }}
+          DISCORD_BOT_TOKEN: ${{ matrix.config.env.DISCORD_BOT_TOKEN }}
+          DISCORD_DM_POLICY: ${{ matrix.config.env.DISCORD_DM_POLICY }}
+          CF_AI_GATEWAY_MODEL: ${{ matrix.config.env.CF_AI_GATEWAY_MODEL }}
+        run: cctr -vv test/e2e
+
+      - name: Fail if E2E tests failed
+        if: steps.e2e.outcome == 'failure'
+        run: exit 1

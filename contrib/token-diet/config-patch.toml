@@ -1,0 +1,72 @@
+# ──────────────────────────────────────────────────────────
+# ZeroClaw Token Diet — config.toml patch
+# ──────────────────────────────────────────────────────────
+# Merge these sections into your existing config.toml on the
+# deployment server (typically ~/.zeroclaw/config.toml).
+#
+# CHANGE 1: Switch skills from "full" (inline everything) to
+# "compact" (name + description only; model reads SKILL.md
+# on demand via file_read).
+#
+# Savings: ~4,960 tokens/turn
+# ──────────────────────────────────────────────────────────
+
+[skills]
+prompt_injection_mode = "compact"
+
+# ──────────────────────────────────────────────────────────
+# CHANGE 2: Expand the non-CLI excluded tools list.
+#
+# Your current deployment allows 15 tools on Discord.
+# Several are rarely used in a messaging context and add
+# ~300-700 tokens to the tools[] JSON array per turn.
+#
+# Add any of these to non_cli_excluded_tools to exclude
+# them from non-CLI channels (Discord, Telegram, etc.).
+# The model simply won't see them — no functionality lost
+# on CLI where they remain available.
+#
+# Savings per tool (approximate):
+#   browser      ~450 tok  (20+ params, huge schema)
+#   task_plan    ~150 tok
+#   content_search ~150 tok
+#   process      ~125 tok
+#   apply_patch   ~87 tok
+#   pdf_read      ~62 tok
+#   glob_search   ~50 tok
+# ──────────────────────────────────────────────────────────
+
+[autonomy]
+non_cli_excluded_tools = [
+    # === Original defaults (keep these) ===
+    "shell",
+    "file_write",
+    "file_edit",
+    "git_operations",
+    "schedule",
+    "cron_add",
+    "cron_remove",
+    "cron_update",
+    "cron_run",
+    "memory_store",
+    "memory_forget",
+    "proxy_config",
+    "model_routing_config",
+    "pushover",
+    "composio",
+    "delegate",
+    "screenshot",
+    "image_info",
+
+    # === NEW: Token diet additions ===
+    # Uncomment the tools you DON'T need on messaging channels.
+    # Each one you uncomment saves tokens on every single turn.
+
+    # "browser",          # ~450 tok — the biggest single tool schema
+    # "apply_patch",      # ~87 tok  — rarely needed in chat
+    # "task_plan",        # ~150 tok — session task tracking
+    # "content_search",   # ~150 tok — grep/rg search (keep if you search code via chat)
+    # "process",          # ~125 tok — background process management
+    # "pdf_read",         # ~62 tok  — PDF text extraction
+    # "glob_search",      # ~50 tok  — file pattern matching
+]
