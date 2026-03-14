@@ -448,4 +448,39 @@ app.all('*', async (c) => {
 
 export default {
   fetch: app.fetch,
+  /**
+   * Cloudflare Worker Scheduled Event (Cron Trigger)
+   *
+   * This handler is called whenever a Cron Trigger fires.
+   * It wakes up the Sandbox container and ensures the ZeroClaw gateway is running.
+   * This is necessary because the container sleeps when idle, which prevents
+   * internal ZeroClaw cron jobs and background processes from firing.
+   */
+  async scheduled(event: ScheduledEvent, env: MoltbotEnv, ctx: ExecutionContext) {
+    console.log(`[CRON] Scheduled event fired: ${event.cron}`);
+
+    // Build sandbox options (honoring SANDBOX_SLEEP_AFTER)
+    const options = buildSandboxOptions(env);
+
+    // Get the sandbox instance
+    const sandbox = getSandbox(env.Sandbox, 'moltbot', options);
+
+    // Ensure the gateway is running (this wakes up the container if it's sleeping)
+    try {
+      console.log('[CRON] Ensuring ZeroClaw gateway is running...');
+      await ensureMoltbotGateway(sandbox, env);
+      console.log('[CRON] ZeroClaw gateway is ready, container is awake.');
+
+      // Also trigger a sync to R2 to ensure persistence
+      console.log('[CRON] Triggering periodic sync to R2...');
+      const syncResult = await syncToR2(sandbox, env);
+      if (syncResult.success) {
+        console.log(`[CRON] Periodic sync complete. Last sync: ${syncResult.lastSync}`);
+      } else {
+        console.warn(`[CRON] Periodic sync skipped or failed: ${syncResult.error}`);
+      }
+    } catch (error) {
+      console.error('[CRON] Scheduled task failed:', error);
+    }
+  },
 };
