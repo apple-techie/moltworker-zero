@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y ca-certificates rclone
 # Build cache bust: 2026-03-05-v34-zeroclaw
 RUN apt-get install -y git build-essential \
   && git clone --depth=1 https://github.com/zeroclaw-labs/zeroclaw.git /tmp/zeroclaw-src \
-  && /tmp/zeroclaw-src/zeroclaw_install.sh --install-rust \
+  && /tmp/zeroclaw-src/install.sh --install-rust \
   && rm -rf /tmp/zeroclaw-src \
   && ln -sf /root/.cargo/bin/zeroclaw /usr/local/bin/zeroclaw \
   && zeroclaw --version
