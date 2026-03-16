@@ -552,8 +552,8 @@ echo "Dev mode: ${ZEROCLAW_DEV_MODE:-false}"
 # Start daemon — handles all channel integrations (Discord, Telegram, Slack, etc.)
 zeroclaw daemon &
 
-# Start gateway — HTTP/WebSocket web UI on port 18789
-zeroclaw gateway --port 18789 --host 0.0.0.0 &
+# Start gateway — HTTP/WebSocket web UI on port 18789 (port configured via config.toml bind)
+zeroclaw gateway &
 
 echo "Waiting for gateway on port 18789..."
 for i in $(seq 1 90); do
@@ -574,6 +574,6 @@ while true; do
         pkill -f "zeroclaw daemon" 2>/dev/null || true
         sleep 1
         zeroclaw daemon &
-        zeroclaw gateway --port 18789 --host 0.0.0.0 &
+        zeroclaw gateway &
     fi
 done
