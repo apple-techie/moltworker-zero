@@ -210,8 +210,13 @@ fi
 # Patch gateway section: allow public bind (we bind 0.0.0.0) and disable pairing
 # (we use our own auth layer via MOLTBOT_GATEWAY_TOKEN)
 sed -i 's/^\s*allow_public_bind\s*=\s*false/allow_public_bind = true/' "$CONFIG_FILE"
+# Ensure allow_public_bind = true even if the key was absent (ZeroClaw version variance)
+grep -q 'allow_public_bind' "$CONFIG_FILE" || sed -i '/^\[gateway\]/a allow_public_bind = true' "$CONFIG_FILE"
 sed -i 's/^\s*require_pairing\s*=\s*true/require_pairing = false/' "$CONFIG_FILE"
-# Replace default bind address so gateway listens on 0.0.0.0:18789 not 127.0.0.1:8080
+# Replace bind address in [gateway] section — section-aware so it catches any default port
+# (ZeroClaw 0.1.8 defaulted to :8080, 0.1.9+ uses :42617; this handles both)
+sed -i '/^\[gateway\]/,/^\[/ s|bind = ".*"|bind = "0.0.0.0:18789"|' "$CONFIG_FILE"
+# Fallback: replace legacy 127.0.0.1:8080 anywhere in case section match missed it
 sed -i 's|127\.0\.0\.1:8080|0.0.0.0:18789|g' "$CONFIG_FILE"
 # Restore paired_tokens from env if available (persisted after first pairing)
 if [ -n "$ZEROCLAW_PAIRED_TOKENS" ]; then
