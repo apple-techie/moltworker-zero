@@ -1,12 +1,11 @@
 FROM docker.io/cloudflare/sandbox:0.7.11
 
 # Install rclone (for R2 persistence)
-RUN apt-get update && apt-get install -y ca-certificates rclone
+RUN apt-get update && apt-get install -y ca-certificates rclone git build-essential
 
 # Install ZeroClaw (Rust binary)
 # Build cache bust: 2026-03-05-v34-zeroclaw
-RUN apt-get install -y git build-essential \
-  && git clone --depth=1 https://github.com/zeroclaw-labs/zeroclaw.git /tmp/zeroclaw-src \
+RUN git clone --depth=1 https://github.com/zeroclaw-labs/zeroclaw.git /tmp/zeroclaw-src \
   && /tmp/zeroclaw-src/install.sh --install-rust \
   && rm -rf /tmp/zeroclaw-src \
   && ln -sf /root/.cargo/bin/zeroclaw /usr/local/bin/zeroclaw \
