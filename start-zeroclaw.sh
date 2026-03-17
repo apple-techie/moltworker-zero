@@ -209,24 +209,28 @@ if [ -n "$CF_AI_GATEWAY_MODEL" ]; then
     echo "Model patched: ${CF_AI_GATEWAY_MODEL}"
 fi
 
-# Patch gateway section: allow public bind (we bind 0.0.0.0) and disable pairing
-# (we use our own auth layer via MOLTBOT_GATEWAY_TOKEN)
-sed -i 's/^\s*allow_public_bind\s*=\s*false/allow_public_bind = true/' "$CONFIG_FILE"
-# Ensure allow_public_bind = true even if the key was absent (ZeroClaw version variance)
-grep -q 'allow_public_bind' "$CONFIG_FILE" || sed -i '/^\[gateway\]/a allow_public_bind = true' "$CONFIG_FILE"
-sed -i 's/^\s*require_pairing\s*=\s*true/require_pairing = false/' "$CONFIG_FILE"
-# Patch gateway host/port so daemon binds on 0.0.0.0 (reachable from sandbox bridge 10.0.0.1)
-sed -i '/^\[gateway\]/,/^\[/ s|host = ".*"|host = "0.0.0.0"|' "$CONFIG_FILE"
-sed -i '/^\[gateway\]/,/^\[/ s|port = .*|port = 42617|' "$CONFIG_FILE"
-echo "Gateway patched: host=0.0.0.0, port=42617"
-# Restore paired_tokens from env if available (persisted after first pairing)
-if [ -n "$ZEROCLAW_PAIRED_TOKENS" ]; then
-    sed -i "s/paired_tokens = \[\]/paired_tokens = [\"${ZEROCLAW_PAIRED_TOKENS}\"]/" "$CONFIG_FILE"
-    echo "Gateway patched: allow_public_bind=true, paired_tokens restored"
-else
-    echo "Gateway patched: allow_public_bind=true"
-    echo "⚠️  No ZEROCLAW_PAIRED_TOKENS set — portal will show pairing code on first run"
-fi
+# Rewrite [gateway] section entirely — sed patching is fragile and allow_public_bind
+# may not be getting set correctly, causing ZeroClaw to force host back to 127.0.0.1.
+# Remove existing [gateway] section first, then append a clean one.
+awk '/^\[gateway\]/{skip=1; next} skip && /^\[/{skip=0} !skip{print}' \
+    "$CONFIG_FILE" > /tmp/.config-patched && mv /tmp/.config-patched "$CONFIG_FILE"
+
+# ZeroClaw forces 127.0.0.1 when require_pairing=false (security guard).
+# Set require_pairing=true with a paired token so it allows 0.0.0.0 binding.
+# Use MOLTBOT_GATEWAY_TOKEN as the paired token (our Worker already authenticates with it).
+GW_TOKEN="${ZEROCLAW_PAIRED_TOKENS:-${MOLTBOT_GATEWAY_TOKEN:-default-token}}"
+
+cat >> "$CONFIG_FILE" << TOML
+
+[gateway]
+host = "0.0.0.0"
+port = 18789
+allow_public_bind = true
+require_pairing = true
+paired_tokens = ["${GW_TOKEN}"]
+TOML
+
+echo "Gateway patched: host=0.0.0.0, port=18789, allow_public_bind=true, require_pairing=true"
 
 # Patch autonomy level (onboard writes this section, we override it)
 sed -i 's/^\s*level\s*=\s*"supervised"/level = "full"/' "$CONFIG_FILE"
@@ -555,18 +559,17 @@ rm -f "$CONFIG_DIR/gateway.lock" 2>/dev/null || true
 
 echo "Dev mode: ${ZEROCLAW_DEV_MODE:-false}"
 
-# Start daemon — manages all components including the gateway (Discord, Telegram, Slack, etc.)
-# Start daemon with explicit --host 0.0.0.0 so sandbox can reach it via 10.0.0.1:42617.
-RUST_LOG=info zeroclaw daemon --host 0.0.0.0 --port 42617 &
+# Start daemon with gateway on 0.0.0.0:18789 (IPC stays on 127.0.0.1:42617 internally)
+RUST_LOG=info zeroclaw daemon --host 0.0.0.0 --port 18789 &
 
-echo "Waiting for daemon on port 42617..."
+echo "Waiting for gateway on port 18789..."
 for i in $(seq 1 90); do
-    if (echo > /dev/tcp/127.0.0.1/42617) 2>/dev/null; then
-        echo "Daemon is up on port 42617"
+    if (echo > /dev/tcp/127.0.0.1/18789) 2>/dev/null; then
+        echo "Gateway is up on port 18789"
         break
     fi
     if [ "$i" -eq 90 ]; then
-        echo "ERROR: Daemon did not come up on 42617 after 90s"
+        echo "ERROR: Gateway did not come up on 18789 after 90s"
     fi
     sleep 1
 done
@@ -574,10 +577,10 @@ done
 # Monitor loop — keep this script running; restart daemon if it dies
 while true; do
     sleep 30
-    if ! (echo > /dev/tcp/127.0.0.1/42617) 2>/dev/null; then
-        echo "Daemon not reachable on 42617, restarting..."
+    if ! (echo > /dev/tcp/127.0.0.1/18789) 2>/dev/null; then
+        echo "Gateway not reachable, restarting..."
         pkill -f "zeroclaw daemon" 2>/dev/null || true
         sleep 2
-        RUST_LOG=info zeroclaw daemon --host 0.0.0.0 --port 42617 &
+        RUST_LOG=info zeroclaw daemon --host 0.0.0.0 --port 18789 &
     fi
 done

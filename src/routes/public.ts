@@ -43,7 +43,7 @@ publicRoutes.get('/api/status', async (c) => {
     // Process exists, check if it's actually responding
     // Try to reach the gateway with a short timeout
     try {
-      await process.waitForPort(18789, { mode: 'tcp', timeout: 5000 });
+      await process.waitForPort(42617, { mode: 'tcp', timeout: 5000 });
       return c.json({ ok: true, status: 'running', processId: process.id });
     } catch {
       return c.json({ ok: false, status: 'not_responding', processId: process.id });

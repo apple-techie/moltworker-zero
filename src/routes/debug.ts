@@ -99,7 +99,7 @@ debug.get('/processes', async (c) => {
 debug.get('/gateway-api', async (c) => {
   const sandbox = c.get('sandbox');
   const path = c.req.query('path') || '/';
-  const MOLTBOT_PORT = 42617;
+  const MOLTBOT_PORT = 18789;
 
   try {
     const url = `http://localhost:${MOLTBOT_PORT}${path}`;

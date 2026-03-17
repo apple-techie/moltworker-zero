@@ -29,7 +29,7 @@ export async function findExistingMoltbotProcess(sandbox: Sandbox): Promise<Proc
     // Sort oldest-first: the real gateway process is always the first one started.
     // Duplicate start-zeroclaw.sh instances (dedup guard → sleep infinity) are created
     // later and must never be mistaken for the real gateway, as waitForPort on them
-    // would always time out (they never listen on port 18789).
+    // would always time out (they never listen on port 42617).
     gatewayProcesses.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
 
     const proc = gatewayProcesses[0];

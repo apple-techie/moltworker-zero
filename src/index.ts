@@ -309,7 +309,7 @@ app.all('*', async (c) => {
     // Get WebSocket connection to the container.
     // wsConnect is designed for WebSocket upgrades and returns response.webSocket.
     // containerFetch does NOT support WebSocket upgrades (returns plain HTTP Response).
-    // ZeroClaw gateway binds directly on 0.0.0.0:18789 (configured in config.toml).
+    // ZeroClaw gateway binds directly on 0.0.0.0:42617 (configured in config.toml).
     const containerResponse = await sandbox.wsConnect(wsRequest, MOLTBOT_PORT);
     console.log('[WS] wsConnect response status:', containerResponse.status);
     console.log('[WS] wsConnect response headers:', JSON.stringify(Object.fromEntries(containerResponse.headers.entries())));

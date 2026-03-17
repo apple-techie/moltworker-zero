@@ -39,7 +39,7 @@ describe('findExistingMoltbotProcess', () => {
   it('returns gateway process when running (zeroclaw)', async () => {
     const gatewayProcess = createFullMockProcess({
       id: 'gateway-1',
-      command: 'zeroclaw gateway --port 18789',
+      command: 'zeroclaw gateway --port 42617',
       status: 'running',
     });
     const { sandbox, listProcessesMock } = createMockSandbox();

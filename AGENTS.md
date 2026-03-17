@@ -119,7 +119,7 @@ Browser
 │     Cloudflare Sandbox Container    │
 │  ┌───────────────────────────────┐  │
 │  │     ZeroClaw Gateway          │  │
-│  │  - Control UI on port 18789   │  │
+│  │  - Control UI on port 42617   │  │
 │  │  - WebSocket RPC protocol     │  │
 │  │  - Agent runtime              │  │
 │  └───────────────────────────────┘  │
