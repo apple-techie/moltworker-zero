@@ -558,37 +558,56 @@ rm -f "$CONFIG_DIR/gateway.lock" 2>/dev/null || true
 echo "Dev mode: ${ZEROCLAW_DEV_MODE:-false}"
 
 # Start daemon — manages all components including the gateway (Discord, Telegram, Slack, etc.)
-# Daemon binds its embedded gateway on 127.0.0.1:42617 (internal IPC port, hardcoded in binary).
-# socat proxies 0.0.0.0:18789 → 127.0.0.1:42617 so the Cloudflare Sandbox can reach it.
+# Gateway should bind on 0.0.0.0:18789 (set via config.toml [gateway] bind).
+# Daemon also has an internal IPC port on 127.0.0.1:42617.
 zeroclaw daemon &
 
-echo "Waiting for daemon on port 42617..."
+echo "Waiting for gateway on port 18789 (direct) or 42617 (IPC fallback)..."
+GATEWAY_MODE=""
 for i in $(seq 1 90); do
+    if (echo > /dev/tcp/127.0.0.1/18789) 2>/dev/null; then
+        echo "Gateway is up directly on port 18789 (no socat needed)"
+        GATEWAY_MODE="direct"
+        break
+    fi
     if (echo > /dev/tcp/127.0.0.1/42617) 2>/dev/null; then
-        echo "Daemon is up on port 42617"
+        echo "Daemon is up on 42617 but not on 18789 — starting socat bridge"
+        pkill -f "socat TCP-LISTEN:18789" 2>/dev/null || true
+        socat TCP-LISTEN:18789,fork,reuseaddr TCP:127.0.0.1:42617 &
+        echo "socat proxy started: 0.0.0.0:18789 → 127.0.0.1:42617 (PID: $!)"
+        echo "WARNING: socat does not support WebSocket upgrades via sandbox.wsConnect()"
+        echo "WARNING: Fix config.toml [gateway] bind to 0.0.0.0:18789 for native WebSocket support"
+        GATEWAY_MODE="socat"
         break
     fi
     sleep 1
 done
 
-# Forward 0.0.0.0:18789 → 127.0.0.1:42617 so the Worker can reach the gateway via containerFetch
-pkill -f "socat TCP-LISTEN:18789" 2>/dev/null || true
-socat TCP-LISTEN:18789,fork,reuseaddr TCP:127.0.0.1:42617 &
-echo "socat proxy started: 0.0.0.0:18789 → 127.0.0.1:42617 (PID: $!)"
+if [ -z "$GATEWAY_MODE" ]; then
+    echo "ERROR: Gateway did not come up on 18789 or 42617 after 90s"
+fi
 
 # Monitor loop — keep this script running; restart daemon if it dies
 while true; do
     sleep 30
-    if ! (echo > /dev/tcp/127.0.0.1/42617) 2>/dev/null; then
-        echo "Daemon not reachable on 42617, restarting..."
-        pkill -f "zeroclaw daemon" 2>/dev/null || true
-        sleep 2
-        zeroclaw daemon &
-        # Ensure socat is still running after daemon restart
-        sleep 3
-        if ! pgrep -f "socat TCP-LISTEN:18789" > /dev/null 2>&1; then
-            socat TCP-LISTEN:18789,fork,reuseaddr TCP:127.0.0.1:42617 &
-            echo "socat proxy restarted"
+    if [ "$GATEWAY_MODE" = "direct" ]; then
+        if ! (echo > /dev/tcp/127.0.0.1/18789) 2>/dev/null; then
+            echo "Gateway not reachable on 18789, restarting daemon..."
+            pkill -f "zeroclaw daemon" 2>/dev/null || true
+            sleep 2
+            zeroclaw daemon &
+        fi
+    else
+        if ! (echo > /dev/tcp/127.0.0.1/42617) 2>/dev/null; then
+            echo "Daemon not reachable on 42617, restarting..."
+            pkill -f "zeroclaw daemon" 2>/dev/null || true
+            sleep 2
+            zeroclaw daemon &
+            sleep 3
+            if ! pgrep -f "socat TCP-LISTEN:18789" > /dev/null 2>&1; then
+                socat TCP-LISTEN:18789,fork,reuseaddr TCP:127.0.0.1:42617 &
+                echo "socat proxy restarted"
+            fi
         fi
     fi
 done

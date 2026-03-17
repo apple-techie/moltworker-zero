@@ -297,9 +297,14 @@ app.all('*', async (c) => {
     if (wsToken) {
       wsHeaders.set('Authorization', `Bearer ${wsToken}`);
     }
-    const wsUrl = new URL(url.toString());
-    wsUrl.searchParams.delete('token');
-    const wsRequest = new Request(wsUrl.toString(), { headers: wsHeaders, method: request.method });
+    // Build container-local URL — wsConnect needs the path/query, not the external hostname.
+    // Using the external hostname could cause wsConnect to connect externally instead of to the container.
+    const containerUrl = new URL(`http://localhost:${MOLTBOT_PORT}${url.pathname}${url.search}`);
+    containerUrl.searchParams.delete('token');
+    const wsRequest = new Request(containerUrl.toString(), { headers: wsHeaders, method: request.method });
+    if (debugLogs) {
+      console.log('[WS] Container URL:', containerUrl.toString());
+    }
 
     // Get WebSocket connection to the container.
     // wsConnect is designed for WebSocket upgrades and returns response.webSocket.
