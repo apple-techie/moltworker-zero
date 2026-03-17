@@ -2,7 +2,7 @@
  * Configuration constants for Moltbot Sandbox
  */
 
-/** Port that the Moltbot gateway listens on inside the container */
+/** Port that socat bridges to the ZeroClaw daemon (127.0.0.1:42617) */
 export const MOLTBOT_PORT = 18789;
 
 /** Maximum time to wait for Moltbot to start (3 minutes) */

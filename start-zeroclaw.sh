@@ -215,18 +215,15 @@ sed -i 's/^\s*allow_public_bind\s*=\s*false/allow_public_bind = true/' "$CONFIG_
 # Ensure allow_public_bind = true even if the key was absent (ZeroClaw version variance)
 grep -q 'allow_public_bind' "$CONFIG_FILE" || sed -i '/^\[gateway\]/a allow_public_bind = true' "$CONFIG_FILE"
 sed -i 's/^\s*require_pairing\s*=\s*true/require_pairing = false/' "$CONFIG_FILE"
-# Replace bind address in [gateway] section — section-aware so it catches any default port
-# (ZeroClaw 0.1.8 defaulted to :8080, 0.1.9+ uses :42617; this handles both)
-sed -i '/^\[gateway\]/,/^\[/ s|bind = ".*"|bind = "0.0.0.0:18789"|' "$CONFIG_FILE"
-# Fallback: replace legacy bind addresses anywhere in case section match missed it
-sed -i 's|127\.0\.0\.1:8080|0.0.0.0:18789|g' "$CONFIG_FILE"
-sed -i 's|127\.0\.0\.1:42617|0.0.0.0:18789|g' "$CONFIG_FILE"
+# Patch daemon bind to 0.0.0.0 so it's reachable from the sandbox network bridge (10.0.0.1)
+sed -i 's|127\.0\.0\.1:42617|0.0.0.0:42617|g' "$CONFIG_FILE"
+echo "Daemon bind patched: 0.0.0.0:42617"
 # Restore paired_tokens from env if available (persisted after first pairing)
 if [ -n "$ZEROCLAW_PAIRED_TOKENS" ]; then
     sed -i "s/paired_tokens = \[\]/paired_tokens = [\"${ZEROCLAW_PAIRED_TOKENS}\"]/" "$CONFIG_FILE"
-    echo "Gateway patched: allow_public_bind=true, bind=0.0.0.0:18789, paired_tokens restored"
+    echo "Gateway patched: allow_public_bind=true, paired_tokens restored"
 else
-    echo "Gateway patched: allow_public_bind=true, bind=0.0.0.0:18789"
+    echo "Gateway patched: allow_public_bind=true"
     echo "⚠️  No ZEROCLAW_PAIRED_TOKENS set — portal will show pairing code on first run"
 fi
 
@@ -558,56 +555,39 @@ rm -f "$CONFIG_DIR/gateway.lock" 2>/dev/null || true
 echo "Dev mode: ${ZEROCLAW_DEV_MODE:-false}"
 
 # Start daemon — manages all components including the gateway (Discord, Telegram, Slack, etc.)
-# Gateway should bind on 0.0.0.0:18789 (set via config.toml [gateway] bind).
-# Daemon also has an internal IPC port on 127.0.0.1:42617.
-zeroclaw daemon &
+# Daemon hardcodes bind to 127.0.0.1:42617 (not configurable).
+# Sandbox connects via 10.0.0.1, so we use socat to bridge 0.0.0.0:18789 → 127.0.0.1:42617.
+RUST_LOG=info zeroclaw daemon &
 
-echo "Waiting for gateway on port 18789 (direct) or 42617 (IPC fallback)..."
-GATEWAY_MODE=""
+echo "Waiting for daemon on port 42617..."
 for i in $(seq 1 90); do
-    if (echo > /dev/tcp/127.0.0.1/18789) 2>/dev/null; then
-        echo "Gateway is up directly on port 18789 (no socat needed)"
-        GATEWAY_MODE="direct"
-        break
-    fi
     if (echo > /dev/tcp/127.0.0.1/42617) 2>/dev/null; then
-        echo "Daemon is up on 42617 but not on 18789 — starting socat bridge"
+        echo "Daemon is up on 127.0.0.1:42617"
+        # Start socat bridge so sandbox can reach daemon via 10.0.0.1:18789
         pkill -f "socat TCP-LISTEN:18789" 2>/dev/null || true
         socat TCP-LISTEN:18789,fork,reuseaddr TCP:127.0.0.1:42617 &
-        echo "socat proxy started: 0.0.0.0:18789 → 127.0.0.1:42617 (PID: $!)"
-        echo "WARNING: socat does not support WebSocket upgrades via sandbox.wsConnect()"
-        echo "WARNING: Fix config.toml [gateway] bind to 0.0.0.0:18789 for native WebSocket support"
-        GATEWAY_MODE="socat"
+        echo "socat bridge started: 0.0.0.0:18789 → 127.0.0.1:42617 (PID: $!)"
         break
+    fi
+    if [ "$i" -eq 90 ]; then
+        echo "ERROR: Daemon did not come up on 42617 after 90s"
     fi
     sleep 1
 done
 
-if [ -z "$GATEWAY_MODE" ]; then
-    echo "ERROR: Gateway did not come up on 18789 or 42617 after 90s"
-fi
-
 # Monitor loop — keep this script running; restart daemon if it dies
 while true; do
     sleep 30
-    if [ "$GATEWAY_MODE" = "direct" ]; then
-        if ! (echo > /dev/tcp/127.0.0.1/18789) 2>/dev/null; then
-            echo "Gateway not reachable on 18789, restarting daemon..."
-            pkill -f "zeroclaw daemon" 2>/dev/null || true
-            sleep 2
-            zeroclaw daemon &
-        fi
-    else
-        if ! (echo > /dev/tcp/127.0.0.1/42617) 2>/dev/null; then
-            echo "Daemon not reachable on 42617, restarting..."
-            pkill -f "zeroclaw daemon" 2>/dev/null || true
-            sleep 2
-            zeroclaw daemon &
-            sleep 3
-            if ! pgrep -f "socat TCP-LISTEN:18789" > /dev/null 2>&1; then
-                socat TCP-LISTEN:18789,fork,reuseaddr TCP:127.0.0.1:42617 &
-                echo "socat proxy restarted"
-            fi
+    if ! (echo > /dev/tcp/127.0.0.1/42617) 2>/dev/null; then
+        echo "Daemon not reachable on 42617, restarting..."
+        pkill -f "zeroclaw daemon" 2>/dev/null || true
+        pkill -f "socat TCP-LISTEN:18789" 2>/dev/null || true
+        sleep 2
+        RUST_LOG=info zeroclaw daemon &
+        sleep 3
+        if (echo > /dev/tcp/127.0.0.1/42617) 2>/dev/null; then
+            socat TCP-LISTEN:18789,fork,reuseaddr TCP:127.0.0.1:42617 &
+            echo "socat bridge restarted"
         fi
     fi
 done

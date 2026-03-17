@@ -335,37 +335,33 @@ app.all('*', async (c) => {
     // Create a WebSocket pair for the client
     const [clientWs, serverWs] = Object.values(new WebSocketPair());
 
-    // Accept both WebSockets
-    serverWs.accept();
-    containerWs.accept();
+    // IMPORTANT: Attach event listeners BEFORE accept() to avoid losing early messages.
+    // ZeroClaw may send messages immediately after upgrade (e.g., handshake, initial state).
 
-    if (debugLogs) {
-      console.log('[WS] Both WebSockets accepted');
-      console.log('[WS] containerWs.readyState:', containerWs.readyState);
-      console.log('[WS] serverWs.readyState:', serverWs.readyState);
-    }
+    let wsMessageCount = 0;
 
     // Relay messages from client to container
     serverWs.addEventListener('message', (event) => {
-      if (debugLogs) {
+      if (debugLogs || wsMessageCount < 3) {
         console.log(
           '[WS] Client -> Container:',
           typeof event.data,
           typeof event.data === 'string' ? event.data.slice(0, 200) : '(binary)',
         );
       }
-      if (containerWs.readyState === WebSocket.OPEN) {
+      try {
         containerWs.send(event.data);
-      } else if (debugLogs) {
-        console.log('[WS] Container not open, readyState:', containerWs.readyState);
+      } catch (e) {
+        console.error('[WS] Failed to send to container:', e);
       }
     });
 
     // Relay messages from container to client, with error transformation
     containerWs.addEventListener('message', (event) => {
-      if (debugLogs) {
+      wsMessageCount++;
+      if (debugLogs || wsMessageCount <= 3) {
         console.log(
-          '[WS] Container -> Client (raw):',
+          '[WS] Container -> Client:',
           typeof event.data,
           typeof event.data === 'string' ? event.data.slice(0, 500) : '(binary)',
         );
@@ -376,52 +372,33 @@ app.all('*', async (c) => {
       if (typeof data === 'string') {
         try {
           const parsed = JSON.parse(data);
-          if (debugLogs) {
-            console.log('[WS] Parsed JSON, has error.message:', !!parsed.error?.message);
-          }
           if (parsed.error?.message) {
-            if (debugLogs) {
-              console.log('[WS] Original error.message:', parsed.error.message);
-            }
             parsed.error.message = transformErrorMessage(parsed.error.message, url.host);
-            if (debugLogs) {
-              console.log('[WS] Transformed error.message:', parsed.error.message);
-            }
             data = JSON.stringify(parsed);
           }
-        } catch (e) {
-          if (debugLogs) {
-            console.log('[WS] Not JSON or parse error:', e);
-          }
+        } catch {
+          // Not JSON, pass through as-is
         }
       }
 
-      if (serverWs.readyState === WebSocket.OPEN) {
+      try {
         serverWs.send(data);
-      } else if (debugLogs) {
-        console.log('[WS] Server not open, readyState:', serverWs.readyState);
+      } catch (e) {
+        console.error('[WS] Failed to send to client:', e);
       }
     });
 
     // Handle close events
     serverWs.addEventListener('close', (event) => {
-      if (debugLogs) {
-        console.log('[WS] Client closed:', event.code, event.reason);
-      }
+      console.log('[WS] Client closed:', event.code, event.reason);
       containerWs.close(event.code, event.reason);
     });
 
     containerWs.addEventListener('close', (event) => {
-      if (debugLogs) {
-        console.log('[WS] Container closed:', event.code, event.reason);
-      }
-      // Transform the close reason (truncate to 123 bytes max for WebSocket spec)
+      console.log('[WS] Container closed:', event.code, event.reason);
       let reason = transformErrorMessage(event.reason, url.host);
       if (reason.length > 123) {
         reason = reason.slice(0, 120) + '...';
-      }
-      if (debugLogs) {
-        console.log('[WS] Transformed close reason:', reason);
       }
       serverWs.close(event.code, reason);
     });
@@ -436,6 +413,11 @@ app.all('*', async (c) => {
       console.error('[WS] Container error:', event);
       serverWs.close(1011, 'Container error');
     });
+
+    // Accept AFTER listeners are attached — this starts message delivery
+    serverWs.accept();
+    containerWs.accept();
+    console.log('[WS] WebSocket relay established for', url.pathname);
 
     if (debugLogs) {
       console.log('[WS] Returning intercepted WebSocket response');
@@ -464,10 +446,39 @@ app.all('*', async (c) => {
   const httpResponse = await sandbox.containerFetch(request, MOLTBOT_PORT);
   console.log('[HTTP] Response status:', httpResponse.status);
 
+  const contentType = httpResponse.headers.get('content-type') || '';
+  const isSSE = contentType.includes('text/event-stream');
+
+  if (isSSE) {
+    console.log('[SSE] Detected event-stream response for', url.pathname);
+  }
+
   // Add debug header to verify worker handled the request
   const newHeaders = new Headers(httpResponse.headers);
   newHeaders.set('X-Worker-Debug', 'proxy-to-moltbot');
   newHeaders.set('X-Debug-Path', url.pathname);
+
+  // For SSE responses, ensure proper streaming headers to prevent edge buffering
+  if (isSSE) {
+    newHeaders.set('Cache-Control', 'no-cache, no-transform');
+    newHeaders.set('X-Accel-Buffering', 'no');
+    newHeaders.delete('Content-Length');
+    newHeaders.delete('Content-Encoding');
+
+    // Pipe through a TransformStream to ensure chunked streaming delivery.
+    // Without this, containerFetch may buffer the entire SSE response.
+    if (httpResponse.body) {
+      const { readable, writable } = new TransformStream();
+      httpResponse.body.pipeTo(writable).catch((err) => {
+        console.error('[SSE] Stream pipe error:', err);
+      });
+      return new Response(readable, {
+        status: httpResponse.status,
+        statusText: httpResponse.statusText,
+        headers: newHeaders,
+      });
+    }
+  }
 
   return new Response(httpResponse.body, {
     status: httpResponse.status,
