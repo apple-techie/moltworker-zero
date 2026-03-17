@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   listDevices,
   approveDevice,
@@ -6,6 +6,7 @@ import {
   restartGateway,
   getStorageStatus,
   triggerSync,
+  getProcessLogs,
   AuthError,
   type PendingDevice,
   type PairedDevice,
@@ -43,6 +44,90 @@ function formatTimeAgo(ts: number) {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+// Strip ANSI escape codes (ZeroClaw uses colored output)
+function stripAnsi(str: string): string {
+  return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+}
+
+function LogConsole() {
+  const [lines, setLines] = useState<string[]>([]);
+  const [paused, setPaused] = useState(false);
+  const [logError, setLogError] = useState<string | null>(null);
+  const lastLenRef = useRef(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const pausedRef = useRef(false);
+
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+
+    const poll = async () => {
+      if (!pausedRef.current) {
+        try {
+          const data = await getProcessLogs();
+          const raw = stripAnsi(data.stdout || '');
+          if (raw.length > lastLenRef.current) {
+            const newContent = raw.slice(lastLenRef.current);
+            lastLenRef.current = raw.length;
+            const newLines = newContent.split('\n').filter((l) => l.trim().length > 0);
+            setLines((prev) => [...prev, ...newLines].slice(-500));
+            setLogError(null);
+          }
+        } catch (err) {
+          setLogError(err instanceof Error ? err.message : 'Failed to fetch logs');
+        }
+      }
+      timer = setTimeout(poll, 2000);
+    };
+
+    poll();
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Auto-scroll when not paused
+  useEffect(() => {
+    if (!paused && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [lines, paused]);
+
+  const handleClear = () => {
+    setLines([]);
+    lastLenRef.current = 0;
+  };
+
+  return (
+    <section className="devices-section log-console-section">
+      <div className="section-header">
+        <h2>Container Logs</h2>
+        <div className="header-actions">
+          <button className="btn btn-secondary btn-sm" onClick={handleClear}>
+            Clear
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setPaused((p) => !p)}>
+            {paused ? 'Resume' : 'Pause'}
+          </button>
+        </div>
+      </div>
+      {logError && <p className="log-error">{logError}</p>}
+      <div className="log-console" ref={scrollRef}>
+        {lines.length === 0 ? (
+          <span className="log-empty">Waiting for logs…</span>
+        ) : (
+          lines.map((line, i) => (
+            <div key={i} className="log-line">
+              {line}
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  );
 }
 
 export default function AdminPage() {
@@ -243,6 +328,8 @@ export default function AdminPage() {
           clients will be temporarily disconnected.
         </p>
       </section>
+
+      <LogConsole />
     </div>
   );
 }

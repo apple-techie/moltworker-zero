@@ -137,3 +137,18 @@ export async function triggerSync(): Promise<SyncResponse> {
     method: 'POST',
   });
 }
+
+export interface ProcessLogsResponse {
+  status: string;
+  process_id?: string;
+  process_status?: string;
+  stdout: string;
+  stderr: string;
+}
+
+export async function getProcessLogs(): Promise<ProcessLogsResponse> {
+  const response = await fetch('/debug/logs', { credentials: 'include' });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json() as Promise<ProcessLogsResponse>;
+}
+
