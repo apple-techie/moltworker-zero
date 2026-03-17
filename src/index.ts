@@ -440,9 +440,23 @@ app.all('*', async (c) => {
     if (debugLogs) {
       console.log('[WS] Returning intercepted WebSocket response');
     }
+
+    // Forward WebSocket response headers from the container (especially Sec-WebSocket-Protocol).
+    // If the browser requested a subprotocol (e.g., "zeroclaw.v1") and we don't echo it back,
+    // the browser will reject the upgrade per RFC 6455.
+    const wsResponseHeaders = new Headers();
+    const subprotocol = containerResponse.headers.get('sec-websocket-protocol');
+    if (subprotocol) {
+      wsResponseHeaders.set('sec-websocket-protocol', subprotocol);
+      if (debugLogs) {
+        console.log('[WS] Forwarding subprotocol:', subprotocol);
+      }
+    }
+
     return new Response(null, {
       status: 101,
       webSocket: clientWs,
+      headers: wsResponseHeaders,
     });
   }
 
