@@ -301,9 +301,12 @@ app.all('*', async (c) => {
     wsUrl.searchParams.delete('token');
     const wsRequest = new Request(wsUrl.toString(), { headers: wsHeaders, method: request.method });
 
-    // Get WebSocket connection to the container
-    const containerResponse = await sandbox.wsConnect(wsRequest, MOLTBOT_PORT);
-    console.log('[WS] wsConnect response status:', containerResponse.status);
+    // Get WebSocket connection to the container via containerFetch.
+    // containerFetch routes through port 18789 (socat → 42617) and returns
+    // response.webSocket on a 101 Upgrade — standard CF Workers WS proxy pattern.
+    // wsConnect uses a different internal path that bypasses the TCP port proxy.
+    const containerResponse = await sandbox.containerFetch(wsRequest, MOLTBOT_PORT);
+    console.log('[WS] containerFetch (WS) response status:', containerResponse.status);
 
     // Get the container-side WebSocket
     const containerWs = containerResponse.webSocket;
