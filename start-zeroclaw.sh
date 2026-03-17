@@ -17,8 +17,10 @@ STARTUP_LOCK="/tmp/.zeroclaw-startup.lock"
 if [ -f "$STARTUP_LOCK" ]; then
     LOCK_PID=$(cat "$STARTUP_LOCK" 2>/dev/null || echo "")
     if [ -n "$LOCK_PID" ] && kill -0 "$LOCK_PID" 2>/dev/null; then
-        echo "Another startup instance already running (PID $LOCK_PID), exiting"
-        exit 0
+        echo "Another startup instance already running (PID $LOCK_PID), sleeping..."
+        # Sleep instead of exit — prevents the container runtime from treating exit 0
+        # as "completed" and re-invoking CMD in a tight loop.
+        sleep infinity
     fi
     rm -f "$STARTUP_LOCK"
 fi
@@ -216,8 +218,9 @@ sed -i 's/^\s*require_pairing\s*=\s*true/require_pairing = false/' "$CONFIG_FILE
 # Replace bind address in [gateway] section — section-aware so it catches any default port
 # (ZeroClaw 0.1.8 defaulted to :8080, 0.1.9+ uses :42617; this handles both)
 sed -i '/^\[gateway\]/,/^\[/ s|bind = ".*"|bind = "0.0.0.0:18789"|' "$CONFIG_FILE"
-# Fallback: replace legacy 127.0.0.1:8080 anywhere in case section match missed it
+# Fallback: replace legacy bind addresses anywhere in case section match missed it
 sed -i 's|127\.0\.0\.1:8080|0.0.0.0:18789|g' "$CONFIG_FILE"
+sed -i 's|127\.0\.0\.1:42617|0.0.0.0:18789|g' "$CONFIG_FILE"
 # Restore paired_tokens from env if available (persisted after first pairing)
 if [ -n "$ZEROCLAW_PAIRED_TOKENS" ]; then
     sed -i "s/paired_tokens = \[\]/paired_tokens = [\"${ZEROCLAW_PAIRED_TOKENS}\"]/" "$CONFIG_FILE"
@@ -554,31 +557,38 @@ rm -f "$CONFIG_DIR/gateway.lock" 2>/dev/null || true
 
 echo "Dev mode: ${ZEROCLAW_DEV_MODE:-false}"
 
-# Start daemon — handles all channel integrations (Discord, Telegram, Slack, etc.)
+# Start daemon — manages all components including the gateway (Discord, Telegram, Slack, etc.)
+# Daemon binds its embedded gateway on 127.0.0.1:42617 (internal IPC port, hardcoded in binary).
+# socat proxies 0.0.0.0:18789 → 127.0.0.1:42617 so the Cloudflare Sandbox can reach it.
 zeroclaw daemon &
 
-# Start gateway — HTTP/WebSocket web UI on port 18789 (port configured via config.toml bind)
-zeroclaw gateway &
-
-echo "Waiting for gateway on port 18789..."
+echo "Waiting for daemon on port 42617..."
 for i in $(seq 1 90); do
-    if (echo > /dev/tcp/127.0.0.1/18789) 2>/dev/null; then
-        echo "Gateway is up on port 18789"
+    if (echo > /dev/tcp/127.0.0.1/42617) 2>/dev/null; then
+        echo "Daemon is up on port 42617"
         break
     fi
     sleep 1
 done
 
+# Forward 0.0.0.0:18789 → 127.0.0.1:42617 so the Worker can reach the gateway via containerFetch
+pkill -f "socat TCP-LISTEN:18789" 2>/dev/null || true
+socat TCP-LISTEN:18789,fork,reuseaddr TCP:127.0.0.1:42617 &
+echo "socat proxy started: 0.0.0.0:18789 → 127.0.0.1:42617 (PID: $!)"
 
-# Monitor loop — keep this script running and restart if either process dies
+# Monitor loop — keep this script running; restart daemon if it dies
 while true; do
     sleep 30
-    if ! (echo > /dev/tcp/127.0.0.1/18789) 2>/dev/null; then
-        echo "Gateway not reachable, restarting..."
-        pkill -f "zeroclaw gateway" 2>/dev/null || true
+    if ! (echo > /dev/tcp/127.0.0.1/42617) 2>/dev/null; then
+        echo "Daemon not reachable on 42617, restarting..."
         pkill -f "zeroclaw daemon" 2>/dev/null || true
-        sleep 1
+        sleep 2
         zeroclaw daemon &
-        zeroclaw gateway &
+        # Ensure socat is still running after daemon restart
+        sleep 3
+        if ! pgrep -f "socat TCP-LISTEN:18789" > /dev/null 2>&1; then
+            socat TCP-LISTEN:18789,fork,reuseaddr TCP:127.0.0.1:42617 &
+            echo "socat proxy restarted"
+        fi
     fi
 done
