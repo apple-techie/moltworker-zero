@@ -304,14 +304,22 @@ app.all('*', async (c) => {
     // Get WebSocket connection to the container.
     // wsConnect is designed for WebSocket upgrades and returns response.webSocket.
     // containerFetch does NOT support WebSocket upgrades (returns plain HTTP Response).
-    // socat inside the container forwards 0.0.0.0:18789 → 127.0.0.1:42617 (daemon).
+    // ZeroClaw gateway binds directly on 0.0.0.0:18789 (configured in config.toml).
     const containerResponse = await sandbox.wsConnect(wsRequest, MOLTBOT_PORT);
     console.log('[WS] wsConnect response status:', containerResponse.status);
+    console.log('[WS] wsConnect response headers:', JSON.stringify(Object.fromEntries(containerResponse.headers.entries())));
 
     // Get the container-side WebSocket
     const containerWs = containerResponse.webSocket;
     if (!containerWs) {
-      console.error('[WS] No WebSocket in container response - falling back to direct proxy');
+      // Log the response body to understand why upgrade failed
+      try {
+        const body = await containerResponse.clone().text();
+        console.error('[WS] No WebSocket in container response. Body preview:', body.slice(0, 500));
+      } catch (e) {
+        console.error('[WS] No WebSocket in container response, could not read body');
+      }
+      console.error('[WS] Falling back to direct proxy');
       return containerResponse;
     }
 

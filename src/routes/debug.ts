@@ -242,7 +242,7 @@ debug.get('/ws-test', async (c) => {
   <div id="log"></div>
 
   <script>
-    const wsUrl = '${wsProtocol}://${host}/';
+    const wsUrl = '${wsProtocol}://${host}/ws/chat?token=' + (new URLSearchParams(window.location.search).get('token') || '');
     let ws = null;
 
     const log = (msg, className = '') => {
