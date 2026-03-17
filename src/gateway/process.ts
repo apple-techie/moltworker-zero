@@ -13,22 +13,34 @@ import { ensureRcloneConfig } from './r2';
 export async function findExistingMoltbotProcess(sandbox: Sandbox): Promise<Process | null> {
   try {
     const processes = await sandbox.listProcesses();
-    for (const proc of processes) {
-      // Match gateway process (zeroclaw gateway)
-      // Don't match CLI commands like "zeroclaw channel list"
+
+    const gatewayProcesses = processes.filter((proc) => {
       const isGatewayProcess =
         proc.command.includes('start-zeroclaw.sh') || proc.command.includes('zeroclaw gateway');
       const isCliCommand =
         proc.command.includes('zeroclaw channel') ||
         proc.command.includes('zeroclaw --version') ||
         proc.command.includes('zeroclaw onboard');
+      return isGatewayProcess && !isCliCommand && (proc.status === 'starting' || proc.status === 'running');
+    });
 
-      if (isGatewayProcess && !isCliCommand) {
-        if (proc.status === 'starting' || proc.status === 'running') {
-          return proc;
-        }
-      }
-    }
+    if (gatewayProcesses.length === 0) return null;
+
+    // Sort oldest-first: the real gateway process is always the first one started.
+    // Duplicate start-zeroclaw.sh instances (dedup guard → sleep infinity) are created
+    // later and must never be mistaken for the real gateway, as waitForPort on them
+    // would always time out (they never listen on port 18789).
+    gatewayProcesses.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+
+    const proc = gatewayProcesses[0];
+    console.log(
+      'Found existing gateway process:',
+      proc.id,
+      'status:',
+      proc.status,
+      `(${gatewayProcesses.length} total matching processes)`,
+    );
+    return proc;
   } catch (e) {
     console.log('Could not list processes:', e);
   }

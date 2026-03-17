@@ -459,7 +459,7 @@ export default {
    * This is necessary because the container sleeps when idle, which prevents
    * internal ZeroClaw cron jobs and background processes from firing.
    */
-  async scheduled(event: ScheduledEvent, env: MoltbotEnv, ctx: ExecutionContext) {
+  async scheduled(event: ScheduledEvent, env: MoltbotEnv, _ctx: ExecutionContext) {
     console.log(`[CRON] Scheduled event fired: ${event.cron}`);
 
     // Build sandbox options (honoring SANDBOX_SLEEP_AFTER)
