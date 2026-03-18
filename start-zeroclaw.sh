@@ -226,11 +226,11 @@ cat >> "$CONFIG_FILE" << TOML
 host = "0.0.0.0"
 port = 18789
 allow_public_bind = true
-require_pairing = true
+require_pairing = false
 paired_tokens = ["${GW_TOKEN}"]
 TOML
 
-echo "Gateway patched: host=0.0.0.0, port=18789, allow_public_bind=true, require_pairing=true"
+echo "Gateway patched: host=0.0.0.0, port=18789, allow_public_bind=true"
 
 # Patch autonomy level (onboard writes this section, we override it)
 sed -i 's/^\s*level\s*=\s*"supervised"/level = "full"/' "$CONFIG_FILE"
