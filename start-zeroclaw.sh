@@ -292,6 +292,7 @@ else
 
 [agent]
 compact_context = true
+max_tool_iterations = 20
 TOML
     echo "Token diet: added [agent] section with compact_context = true"
 fi
