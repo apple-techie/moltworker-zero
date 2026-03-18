@@ -148,8 +148,8 @@ adminApi.post('/devices/approve-all', async (c) => {
 
     for (const device of pending) {
       try {
-        // eslint-disable-next-line no-await-in-loop -- sequential device approval required
         // TODO: confirm zeroclaw channel approve command and flags
+        // eslint-disable-next-line no-await-in-loop -- sequential device approval required
         const approveProc = await sandbox.startProcess(
           `zeroclaw channel approve ${device.requestId}`,
         );

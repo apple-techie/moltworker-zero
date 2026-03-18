@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   listDevices,
-  approveDevice,
-  approveAllDevices,
   restartGateway,
   getStorageStatus,
   triggerSync,
@@ -30,25 +28,11 @@ function formatSyncTime(isoString: string | null) {
   }
 }
 
-function formatTimestamp(ts: number) {
-  const date = new Date(ts);
-  return date.toLocaleString();
-}
-
-function formatTimeAgo(ts: number) {
-  const seconds = Math.floor((Date.now() - ts) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
 // Strip ANSI escape codes (ZeroClaw uses colored output)
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\u001b\[[0-9;]*[a-zA-Z]/g;
 function stripAnsi(str: string): string {
-  return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+  return str.replace(ANSI_RE, '');
 }
 
 function LogConsole() {
@@ -120,7 +104,7 @@ function LogConsole() {
           <span className="log-empty">Waiting for logs…</span>
         ) : (
           lines.map((line, i) => (
-            <div key={i} className="log-line">
+            <div key={`${i}-${line}`} className="log-line">
               {line}
             </div>
           ))
@@ -131,11 +115,10 @@ function LogConsole() {
 }
 
 export default function AdminPage() {
-  const [pending, setPending] = useState<PendingDevice[]>([]);
-  const [paired, setPaired] = useState<PairedDevice[]>([]);
+  const [_pending, setPending] = useState<PendingDevice[]>([]);
+  const [_paired, setPaired] = useState<PairedDevice[]>([]);
   const [storageStatus, setStorageStatus] = useState<StorageStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [restartInProgress, setRestartInProgress] = useState(false);
   const [syncInProgress, setSyncInProgress] = useState(false);
 
@@ -174,41 +157,6 @@ export default function AdminPage() {
     fetchDevices();
     fetchStorageStatus();
   }, [fetchDevices, fetchStorageStatus]);
-
-  const handleApprove = async (requestId: string) => {
-    setActionInProgress(requestId);
-    try {
-      const result = await approveDevice(requestId);
-      if (result.success) {
-        // Refresh the list
-        await fetchDevices();
-      } else {
-        setError(result.error || 'Approval failed');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to approve device');
-    } finally {
-      setActionInProgress(null);
-    }
-  };
-
-  const handleApproveAll = async () => {
-    if (pending.length === 0) return;
-
-    setActionInProgress('all');
-    try {
-      const result = await approveAllDevices();
-      if (result.failed && result.failed.length > 0) {
-        setError(`Failed to approve ${result.failed.length} device(s)`);
-      }
-      // Refresh the list
-      await fetchDevices();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to approve devices');
-    } finally {
-      setActionInProgress(null);
-    }
-  };
 
   const handleRestartGateway = async () => {
     if (

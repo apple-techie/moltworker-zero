@@ -62,9 +62,11 @@ export async function syncToR2(sandbox: Sandbox, env: MoltbotEnv): Promise<SyncR
   );
   const dbFiles = (dbCheckResult.stdout || '').trim().split('\n').filter(Boolean);
   console.log('[syncToR2] SQLite DB files found:', dbFiles);
-  for (const dbFile of dbFiles) {
-    await sandbox.exec(`sqlite3 '${dbFile}' "PRAGMA wal_checkpoint(FULL);" 2>/dev/null || true`);
-  }
+  await Promise.all(
+    dbFiles.map((dbFile) =>
+      sandbox.exec(`sqlite3 '${dbFile}' "PRAGMA wal_checkpoint(FULL);" 2>/dev/null || true`),
+    ),
+  );
 
   // Sync config (rclone sync propagates deletions)
   const configResult = await sandbox.exec(

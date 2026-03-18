@@ -321,7 +321,7 @@ app.all('*', async (c) => {
       try {
         const body = await containerResponse.clone().text();
         console.error('[WS] No WebSocket in container response. Body preview:', body.slice(0, 500));
-      } catch (e) {
+      } catch {
         console.error('[WS] No WebSocket in container response, could not read body');
       }
       console.error('[WS] Falling back to direct proxy');
