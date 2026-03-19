@@ -430,11 +430,6 @@ echo "Token diet: workspace files trimmed (~1,200 tok/turn saved)"
 # schema costs ~450 tokens/turn; browser_open covers simple URL opening on Discord)
 sed -i '/^\[browser\]/,/^\[/ s/^\s*enabled\s*=\s*false/enabled = true/' "$CONFIG_FILE"
 sed -i '/^\[browser\]/,/^\[/ s/^\s*allowed_domains\s*=\s*\[\]/allowed_domains = ["*"]/' "$CONFIG_FILE"
-# Set lightpanda binary path — append under [browser] if not already present
-if ! grep -q 'lightpanda_binary_path' "$CONFIG_FILE" 2>/dev/null; then
-    sed -i '/^\[browser\]/a lightpanda_binary_path = "/usr/local/bin/lightpanda"' "$CONFIG_FILE"
-fi
-echo "Browser patched: enabled=true, allowed_domains=*, lightpanda=/usr/local/bin/lightpanda (stays excluded on non-CLI for token diet)"
 
 # ── Token Diet: exclude rarely-used tools from non-CLI channels ──
 # These tools remain available on CLI but are hidden from Discord/Telegram to save tokens.
