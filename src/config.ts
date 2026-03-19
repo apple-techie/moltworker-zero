@@ -5,6 +5,9 @@
 /** Port that the ZeroClaw gateway listens on inside the container */
 export const MOLTBOT_PORT = 18789;
 
+/** Port that camofox-browser listens on inside its container */
+export const CAMOFOX_PORT = 9377;
+
 /** Maximum time to wait for Moltbot to start (3 minutes) */
 export const STARTUP_TIMEOUT_MS = 180_000;
 

@@ -431,6 +431,12 @@ echo "Token diet: workspace files trimmed (~1,200 tok/turn saved)"
 sed -i '/^\[browser\]/,/^\[/ s/^\s*enabled\s*=\s*false/enabled = true/' "$CONFIG_FILE"
 sed -i '/^\[browser\]/,/^\[/ s/^\s*allowed_domains\s*=\s*\[\]/allowed_domains = ["*"]/' "$CONFIG_FILE"
 
+# Point browser tool at camofox-browser running in separate container via Worker proxy
+if [ -n "$WORKER_URL" ]; then
+    sed -i '/^\[browser\]/a camofox_endpoint = "'"${WORKER_URL}:9377/browser"'"' "$CONFIG_FILE"
+    echo "Browser patched: camofox_endpoint=${WORKER_URL}:9377/browser"
+fi
+
 # ── Token Diet: exclude rarely-used tools from non-CLI channels ──
 # These tools remain available on CLI but are hidden from Discord/Telegram to save tokens.
 # browser (~450 tok) + browser_open (~40 tok) are already excluded by onboard defaults.
