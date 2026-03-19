@@ -11,11 +11,6 @@ import { findExistingMoltbotProcess } from '../gateway';
  */
 const publicRoutes = new Hono<AppEnv>();
 
-// GET / - Redirect root to admin UI
-publicRoutes.get('/', (c) => {
-  return c.redirect('/_admin/');
-});
-
 // GET /sandbox-health - Health check endpoint
 publicRoutes.get('/sandbox-health', (c) => {
   return c.json({

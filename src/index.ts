@@ -443,8 +443,28 @@ app.all('*', async (c) => {
   }
 
   console.log('[HTTP] Proxying:', url.pathname + url.search);
-  const httpResponse = await sandbox.containerFetch(request, MOLTBOT_PORT);
+  // Rewrite to container-local URL — same as WebSocket path.
+  const containerHttpUrl = new URL(`http://localhost:${MOLTBOT_PORT}${url.pathname}${url.search}`);
+  // Add Bearer token — ZeroClaw requires auth even for web dashboard.
+  // Same approach as the WebSocket proxy path above.
+  const httpToken = url.searchParams.get('token') || c.env.MOLTBOT_GATEWAY_TOKEN;
+  const httpHeaders = new Headers(request.headers);
+  if (httpToken) {
+    httpHeaders.set('Authorization', `Bearer ${httpToken}`);
+  }
+  containerHttpUrl.searchParams.delete('token');
+  const containerRequest = new Request(containerHttpUrl.toString(), {
+    method: request.method,
+    headers: httpHeaders,
+    body: request.body,
+  });
+  const httpResponse = await sandbox.containerFetch(containerRequest, MOLTBOT_PORT);
   console.log('[HTTP] Response status:', httpResponse.status);
+  console.log('[HTTP] Response headers:', JSON.stringify(Object.fromEntries(httpResponse.headers.entries())));
+  if (httpResponse.status >= 400) {
+    const debugBody = await httpResponse.clone().text();
+    console.log('[HTTP] Error response body:', debugBody.slice(0, 500));
+  }
 
   const contentType = httpResponse.headers.get('content-type') || '';
   const isSSE = contentType.includes('text/event-stream');
