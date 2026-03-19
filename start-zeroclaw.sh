@@ -292,10 +292,17 @@ else
 
 [agent]
 compact_context = true
-max_tool_iterations = 20
 TOML
     echo "Token diet: added [agent] section with compact_context = true"
 fi
+
+# Always ensure max_tool_iterations = 20 (onboard defaults to 10)
+if grep -q 'max_tool_iterations' "$CONFIG_FILE" 2>/dev/null; then
+    sed -i 's/max_tool_iterations\s*=\s*[0-9]*/max_tool_iterations = 20/' "$CONFIG_FILE"
+else
+    sed -i '/^\[agent\]/a max_tool_iterations = 20' "$CONFIG_FILE"
+fi
+echo "Agent patched: max_tool_iterations=20"
 
 # ── Token Diet: delete BOOTSTRAP.md ──
 # BOOTSTRAP.md is auto-injected every turn but adds ~170 tokens of boilerplate.
