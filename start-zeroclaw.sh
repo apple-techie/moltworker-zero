@@ -430,12 +430,16 @@ echo "Token diet: workspace files trimmed (~1,200 tok/turn saved)"
 # schema costs ~450 tokens/turn; browser_open covers simple URL opening on Discord)
 sed -i '/^\[browser\]/,/^\[/ s/^\s*enabled\s*=\s*false/enabled = true/' "$CONFIG_FILE"
 sed -i '/^\[browser\]/,/^\[/ s/^\s*allowed_domains\s*=\s*\[\]/allowed_domains = ["*"]/' "$CONFIG_FILE"
-echo "Browser patched: enabled=true, allowed_domains=* (stays excluded on non-CLI for token diet)"
+# Set lightpanda binary path — append under [browser] if not already present
+if ! grep -q 'lightpanda_binary_path' "$CONFIG_FILE" 2>/dev/null; then
+    sed -i '/^\[browser\]/a lightpanda_binary_path = "/usr/local/bin/lightpanda"' "$CONFIG_FILE"
+fi
+echo "Browser patched: enabled=true, allowed_domains=*, lightpanda=/usr/local/bin/lightpanda (stays excluded on non-CLI for token diet)"
 
 # ── Token Diet: exclude rarely-used tools from non-CLI channels ──
 # These tools remain available on CLI but are hidden from Discord/Telegram to save tokens.
 # browser (~450 tok) + browser_open (~40 tok) are already excluded by onboard defaults.
-for tool in "task_plan" "process" "apply_patch" "pdf_read" "glob_search" "content_search"; do
+for tool in "task_plan" "process" "apply_patch" "pdf_read" "glob_search" "content_search" "browser_open" ; do
     # Remove any existing occurrence first (prevents duplicates if onboard already added it)
     sed -i "/\"${tool}\",\?/d" "$CONFIG_FILE"
     # Then add at the front of the list
@@ -530,25 +534,6 @@ for skill_dir in "$SKILLS_DIR"/*/; do
     fi
 done
 
-# Write failsafe rule + skill docs into USER.md
-USER_MD="/root/.zeroclaw/workspace/USER.md"
-if ! grep -q "tool-usage-rules" "$USER_MD" 2>/dev/null; then
-    cat >> "$USER_MD" << 'EOF'
-
-<!-- tool-usage-rules -->
-## MANDATORY Tool Usage Rules
-
-NEVER respond with "I can't browse", "there are limitations in my environment", or describe what you would find instead of actually finding it. Giving up is not acceptable.
-
-For ANY request involving URLs, live data, stock prices, news, or web content — you MUST attempt tools in this order:
-1. `web_search` — use for any factual or live data query
-2. `http_request` — hit the URL or API endpoint directly (e.g. Yahoo Finance: https://query1.finance.yahoo.com/v8/finance/chart/SYMBOL?interval=1d&range=1d — ALWAYS use interval=1d&range=1d for current prices, never interval=1m which returns hundreds of data points)
-3. `web_fetch` — fallback HTTP fetch
-
-If a tool returns a 403, 429, or empty body, try a different endpoint or tool. Only tell the user you could not retrieve data after exhausting all three tools.
-EOF
-    echo "Wrote tool usage rules to USER.md"
-fi
 # ── Token Diet: skill docs no longer inlined into USER.md ──
 # Skills are installed via `zeroclaw skill install` above, which registers them
 # in the skills system. With prompt_injection_mode = "compact", only the skill
