@@ -256,6 +256,10 @@ echo "http_request, cron_*, memory_store, memory_forget patched: allowed on non-
 # Enable web_fetch and web_search
 sed -i '/^\[web_fetch\]/,/^\[/ s/^\s*enabled\s*=\s*false/enabled = true/' "$CONFIG_FILE"
 sed -i '/^\[web_search\]/,/^\[/ s/^\s*enabled\s*=\s*false/enabled = true/' "$CONFIG_FILE"
+WEB_SEARCH_ENABLED=true
+WEB_SEARCH_PROVIDER=duckduckgo
+WEB_SEARCH_MAX_RESULTS=25
+WEB_SEARCH_TIMEOUT_SECS=15
 echo "web_fetch and web_search enabled"
 
 # ── Token Diet: skills compact mode ──
@@ -562,6 +566,7 @@ echo "Token diet: skill docs handled by skills system (compact mode), not inline
 # ============================================================
 # START GATEWAY
 # ============================================================
+
 echo "Starting ZeroClaw Gateway..."
 echo "Gateway will be available on port 18789"
 

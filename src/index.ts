@@ -478,6 +478,15 @@ app.all('*', async (c) => {
   newHeaders.set('X-Worker-Debug', 'proxy-to-moltbot');
   newHeaders.set('X-Debug-Path', url.pathname);
 
+  // Security and CORS Headers (#215)
+  newHeaders.set('Access-Control-Allow-Origin', '*');
+  newHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  newHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  newHeaders.set('X-Content-Type-Options', 'nosniff');
+  newHeaders.set('X-Frame-Options', 'DENY');
+  newHeaders.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  newHeaders.set('Content-Security-Policy', "default-src 'self'; connect-src 'self' wss: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';");
+
   // For SSE responses, ensure proper streaming headers to prevent edge buffering
   if (isSSE) {
     newHeaders.set('Cache-Control', 'no-cache, no-transform');
