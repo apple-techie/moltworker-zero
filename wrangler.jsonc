@@ -57,10 +57,22 @@
   },
   "migrations": [
     {
+      "tag": "v1",
       "new_sqlite_classes": [
         "Sandbox"
       ],
-      "tag": "v1",
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "CamofoxBrowser"
+      ],
+    },
+    {
+      "tag": "v3",
+      "deleted_classes": [
+        "CamofoxBrowser"
+      ],
     },
   ],
   // R2 bucket for persistent storage (moltbot data, conversations, etc.)

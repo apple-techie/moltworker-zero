@@ -21,7 +21,9 @@ export interface MoltbotEnv {
   OPENAI_API_KEY?: string;
   MOLTBOT_GATEWAY_TOKEN?: string; // Gateway token (mapped to ZEROCLAW_GATEWAY_TOKEN for container)
   DEV_MODE?: string; // Set to 'true' for local dev (skips CF Access auth + zeroclaw device pairing)
-  CLOUDFLARE_AUTH_TOKEN?: string; // Cloudflare API token for direct Workers AI access
+  CLOUDFLARE_AUTH_TOKEN?: string; // Cloudflare API token for direct Workers AI
+  // access
+  CF_BROWSER_RENDERING_TOKEN?: string; // API token for Cloudflare Browser Rendering access
   WORKERS_AI_MODEL?: string; // Default Workers AI model e.g. "@cf/qwen/qwen3-30b-a3b-fp8"
   // Custom provider configuration
   CUSTOM_PROVIDER_URL?: string; // OpenAI-compatible base URL → default_provider = "custom:<url>"

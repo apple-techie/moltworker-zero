@@ -43,7 +43,9 @@ export function buildEnvVars(env: MoltbotEnv): Record<string, string> {
 
   // Cloudflare Workers AI direct access (no AI Gateway intermediary)
   if (env.CLOUDFLARE_AUTH_TOKEN) envVars.CLOUDFLARE_AUTH_TOKEN = env.CLOUDFLARE_AUTH_TOKEN;
+  if (env.CF_BROWSER_RENDERING_TOKEN) envVars.CF_BROWSER_RENDERING_TOKEN = env.CF_BROWSER_RENDERING_TOKEN;
   if (env.WORKERS_AI_MODEL) envVars.WORKERS_AI_MODEL = env.WORKERS_AI_MODEL;
+
 
   // Custom provider configuration
   if (env.CUSTOM_PROVIDER_URL) envVars.CUSTOM_PROVIDER_URL = env.CUSTOM_PROVIDER_URL;

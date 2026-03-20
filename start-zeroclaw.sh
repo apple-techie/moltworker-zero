@@ -432,10 +432,27 @@ sed -i '/^\[browser\]/,/^\[/ s/^\s*enabled\s*=\s*false/enabled = true/' "$CONFIG
 sed -i '/^\[browser\]/,/^\[/ s/^\s*allowed_domains\s*=\s*\[\]/allowed_domains = ["*"]/' "$CONFIG_FILE"
 
 # Cloudflare Browser Rendering credentials for [browser] section
-if [ -n "$CF_ACCOUNT_ID" ] && [ -n "$CLOUDFLARE_AUTH_TOKEN" ]; then
-    sed -i '/^\[browser\]/a cloudflare_account_id = "'"${CF_ACCOUNT_ID}"'"\ncloudflare_api_token = "'"${CLOUDFLARE_AUTH_TOKEN}"'"' "$CONFIG_FILE"
+BROWSER_API_TOKEN="${CF_BROWSER_RENDERING_TOKEN}"
+if [ -n "$CF_ACCOUNT_ID" ] && [ -n "$BROWSER_API_TOKEN" ]; then
+    # Replace or add cloudflare_account_id
+    if grep -q 'cloudflare_account_id' "$CONFIG_FILE" 2>/dev/null; then
+        sed -i 's|cloudflare_account_id\s*=\s*"[^"]*"|cloudflare_account_id = "'"${CF_ACCOUNT_ID}"'"|' "$CONFIG_FILE"
+    else
+        sed -i '/^\[browser\]/a cloudflare_account_id = "'"${CF_ACCOUNT_ID}"'"' "$CONFIG_FILE"
+    fi
+    # Replace or add cloudflare_api_token
+    if grep -q 'cloudflare_api_token' "$CONFIG_FILE" 2>/dev/null; then
+        sed -i 's|cloudflare_api_token\s*=\s*"[^"]*"|cloudflare_api_token = "'"${BROWSER_API_TOKEN}"'"|' "$CONFIG_FILE"
+    else
+        sed -i '/^\[browser\]/a cloudflare_api_token = "'"${BROWSER_API_TOKEN}"'"' "$CONFIG_FILE"
+    fi
     echo "Browser patched: cloudflare_account_id + cloudflare_api_token set"
+else
+    echo "WARNING: CF_ACCOUNT_ID or API token not set, skipping browser credentials"
 fi
+
+# Remove camofox_endpoint (onboard adds it by default, we don't use camofox)
+sed -i '/camofox_endpoint/d' "$CONFIG_FILE"
 
 # ── Token Diet: exclude rarely-used tools from non-CLI channels ──
 # These tools remain available on CLI but are hidden from Discord/Telegram to save tokens.
