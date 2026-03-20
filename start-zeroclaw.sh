@@ -431,6 +431,12 @@ echo "Token diet: workspace files trimmed (~1,200 tok/turn saved)"
 sed -i '/^\[browser\]/,/^\[/ s/^\s*enabled\s*=\s*false/enabled = true/' "$CONFIG_FILE"
 sed -i '/^\[browser\]/,/^\[/ s/^\s*allowed_domains\s*=\s*\[\]/allowed_domains = ["*"]/' "$CONFIG_FILE"
 
+# Cloudflare Browser Rendering credentials for [browser] section
+if [ -n "$CF_ACCOUNT_ID" ] && [ -n "$CLOUDFLARE_AUTH_TOKEN" ]; then
+    sed -i '/^\[browser\]/a cloudflare_account_id = "'"${CF_ACCOUNT_ID}"'"\ncloudflare_api_token = "'"${CLOUDFLARE_AUTH_TOKEN}"'"' "$CONFIG_FILE"
+    echo "Browser patched: cloudflare_account_id + cloudflare_api_token set"
+fi
+
 # ── Token Diet: exclude rarely-used tools from non-CLI channels ──
 # These tools remain available on CLI but are hidden from Discord/Telegram to save tokens.
 # browser (~450 tok) + browser_open (~40 tok) are already excluded by onboard defaults.
