@@ -1,12 +1,10 @@
 import type { Sandbox } from '@cloudflare/sandbox';
-import type { Container } from '@cloudflare/containers';
 
 /**
  * Environment bindings for the Moltbot Worker
  */
 export interface MoltbotEnv {
   Sandbox: DurableObjectNamespace<Sandbox>;
-  CAMOFOX: DurableObjectNamespace<Container>;
   ASSETS: Fetcher; // Assets binding for admin UI static files
   MOLTBOT_BUCKET: R2Bucket; // R2 bucket for persistent storage
   // Cloudflare AI Gateway configuration (preferred)

@@ -46,22 +46,12 @@
       "instance_type": "standard-1",
       "max_instances": 1
     },
-    {
-      "class_name": "CamofoxBrowser",
-      "image": "./Dockerfile.camofox",
-      "instance_type": "standard-1",
-      "max_instances": 1
-    },
   ],
   "durable_objects": {
     "bindings": [
       {
         "class_name": "Sandbox",
         "name": "Sandbox",
-      },
-      {
-        "class_name": "CamofoxBrowser",
-        "name": "CAMOFOX",
       },
     ],
   },
@@ -71,12 +61,6 @@
         "Sandbox"
       ],
       "tag": "v1",
-    },
-    {
-      "new_sqlite_classes": [
-        "CamofoxBrowser"
-      ],
-      "tag": "v2",
     },
   ],
   // R2 bucket for persistent storage (moltbot data, conversations, etc.)

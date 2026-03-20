@@ -22,10 +22,8 @@
 
 import { Hono } from 'hono';
 import { getSandbox, Sandbox, type SandboxOptions } from '@cloudflare/sandbox';
-import { Container, getContainer } from '@cloudflare/containers';
-
 import type { AppEnv, MoltbotEnv } from './types';
-import { MOLTBOT_PORT, CAMOFOX_PORT } from './config';
+import { MOLTBOT_PORT } from './config';
 import { createAccessMiddleware } from './auth';
 import { ensureMoltbotGateway, findExistingMoltbotProcess, syncToR2 } from './gateway';
 import { publicRoutes, api, adminUi, debug, cdp } from './routes';
@@ -50,27 +48,6 @@ function transformErrorMessage(message: string, host: string): string {
 
 export { Sandbox };
 
-/**
- * CamofoxBrowser container — runs camofox-browser (headless browser for AI agents).
- * Separate container to keep the main Sandbox image lean and deploys fast.
- * ZeroClaw communicates with it via the Worker's /browser/* proxy route.
- */
-export class CamofoxBrowser extends Container {
-  defaultPort = CAMOFOX_PORT;
-  sleepAfter = '10m';
-
-  override onStart() {
-    console.log('[CAMOFOX] Container started');
-  }
-
-  override onStop() {
-    console.log('[CAMOFOX] Container stopped');
-  }
-
-  override onError(error: unknown) {
-    console.error('[CAMOFOX] Container error:', error);
-  }
-}
 
 /**
  * Validate required environment variables.
@@ -244,35 +221,6 @@ app.use('/debug/*', async (c, next) => {
   return next();
 });
 app.route('/debug', debug);
-
-// =============================================================================
-// BROWSER PROXY: Route /browser/* to the CamofoxBrowser container
-// =============================================================================
-
-app.all('/browser/*', async (c) => {
-  const request = c.req.raw;
-  const url = new URL(request.url);
-
-  // Strip /browser prefix — camofox-browser expects requests at root
-  const camofoxPath = url.pathname.replace(/^\/browser/, '') || '/';
-  const camofoxUrl = new URL(`http://localhost:${CAMOFOX_PORT}${camofoxPath}${url.search}`);
-
-  console.log('[CAMOFOX] Proxying:', camofoxPath);
-
-  const camofox = getContainer(c.env.CAMOFOX, 'camofox');
-  const containerRequest = new Request(camofoxUrl.toString(), {
-    method: request.method,
-    headers: request.headers,
-    body: request.body,
-  });
-
-  const response = await camofox.fetch(containerRequest);
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
-});
 
 // =============================================================================
 // CATCH-ALL: Proxy to Moltbot gateway
