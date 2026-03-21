@@ -33,4 +33,3 @@ COPY skills/ /root/clawd/skills/
 
 WORKDIR /root/clawd
 EXPOSE 18789
-ENTRYPOINT ["/usr/local/bin/start-zeroclaw.sh"]

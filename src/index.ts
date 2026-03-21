@@ -218,6 +218,14 @@ app.use('/debug/*', async (c, next) => {
   if (c.env.DEBUG_ROUTES !== 'true') {
     return c.json({ error: 'Debug routes are disabled' }, 404);
   }
+  // Ensure the sandbox container is awake before debug routes run.
+  // Without this, sandbox.listProcesses() etc. fail with 503 if the container is sleeping.
+  try {
+    await ensureMoltbotGateway(c.get('sandbox'), c.env);
+  } catch (error) {
+    console.error('[DEBUG] Failed to wake sandbox:', error);
+    return c.json({ error: `Container not ready: ${error instanceof Error ? error.message : 'Unknown error'}` }, 503);
+  }
   return next();
 });
 app.route('/debug', debug);
@@ -478,7 +486,7 @@ app.all('*', async (c) => {
   newHeaders.set('X-Worker-Debug', 'proxy-to-moltbot');
   newHeaders.set('X-Debug-Path', url.pathname);
 
-  // Security and CORS Headers (#215)
+  // // Security and CORS Headers (#215)
   newHeaders.set('Access-Control-Allow-Origin', '*');
   newHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   newHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
