@@ -89,7 +89,7 @@
   // Cron Trigger to wake up the container periodically for background tasks
   "triggers": {
     "crons": [
-      "*/9 * * * *"
+      "*/15 * * * *"
     ],
   },
   // Note: CF_ACCOUNT_ID should be set via `wrangler secret put CF_ACCOUNT_ID`
