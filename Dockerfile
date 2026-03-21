@@ -1,11 +1,11 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:latest
 
 # ── STAGE 1: The Builder ─────────────────────────────────────
 FROM docker.io/cloudflare/sandbox:0.7.18 AS builder
 
 # Install build-only dependencies
 RUN apt-get update && apt-get install -y \
-  ca-certificates rclone git build-essential clang mold nodejs npm curl
+  ca-certificates git make clang mold nodejs npm curl
 
 # Build ZeroClaw
 RUN git clone --depth=1 https://github.com/zeroclaw-labs/zeroclaw.git /tmp/zeroclaw-src \
@@ -13,7 +13,7 @@ RUN git clone --depth=1 https://github.com/zeroclaw-labs/zeroclaw.git /tmp/zeroc
   && cd /tmp/zeroclaw-src && ./install.sh --install-rust --force-source-build
 
 # ── STAGE 2: The Runtime (What you actually deploy) ──────────
-FROM docker.io/cloudflare/sandbox:0.7.18
+FROM docker.io/cloudflare/sandbox:0.7.18 AS runtime
 
 # 1. Install ONLY runtime essentials (No compilers, no Node, no NPM)
 RUN apt-get update && apt-get install -y \
