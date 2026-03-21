@@ -14,6 +14,9 @@ RUN git clone --depth=1 https://github.com/zeroclaw-labs/zeroclaw.git /tmp/zeroc
 
 # ── STAGE 2: The Runtime (What you actually deploy) ──────────
 FROM docker.io/cloudflare/sandbox:0.7.18 AS runtime
+# overrride number of instances to save memory
+ENV JAVASCRIPT_POOL_MIN_SIZE=1
+ENV TYPESCRIPT_POOL_MIN_SIZE=1
 
 # 1. Install ONLY runtime essentials (No compilers, no Node, no NPM)
 RUN apt-get update && apt-get install -y \
