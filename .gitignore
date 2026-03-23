@@ -61,5 +61,5 @@ test/e2e/.dev.vars
 
 # npm config
 .npmrc
-
 .claude/
+.git-hash

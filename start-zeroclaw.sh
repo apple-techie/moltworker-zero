@@ -499,11 +499,13 @@ if r2_configured; then
         touch "$MARKER"
 
         while true; do
-            sleep 60*60
+            sleep 3600
 
             CHANGED=/tmp/.changed-files
             {
-                find "$CONFIG_DIR" -newer "$MARKER" -type f -printf '%P\n' 2>/dev/null
+                find "$CONFIG_DIR" -newer "$MARKER" -type f '%P\n' 2>/dev/null
+
+                # find "$CONFIG_DIR" -newer "$MARKER" -type f -printf '%P\n' 2>/dev/null
                 find "$WORKSPACE_DIR" -newer "$MARKER" \
                     -not -path '*/node_modules/*' \
                     -not -path '*/.git/*' \
@@ -544,7 +546,7 @@ for skill_dir in "$SKILLS_DIR"/*/; do
     skill_md="$skill_dir/SKILL.md"
     [ -f "$skill_md" ] || continue
     # Try CLI install first (proper registration), fall back to copy
-    if zeroclaw skills install "$skill_md" 2>&1; then
+    if zeroclaw skills install "$skill_dir" 2>&1; then
         echo "Installed skill via CLI: $skill_name"
     elif zeroclaw skills install "file://$skill_md" 2>&1; then
         echo "Installed skill via file:// URI: $skill_name"
