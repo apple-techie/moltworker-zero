@@ -48,7 +48,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN mkdir -p /root/.zeroclaw /root/clawd/skills
 COPY --from=builder /root/.cargo/bin/zeroclaw /usr/local/bin/zeroclaw
 COPY --from=builder /tmp/skills-out/ /root/clawd/skills/
-COPY skills/ /root/clawd/skills/
 
 # 3. Setup directories and startup script
 COPY start-zeroclaw.sh /usr/local/bin/start-zeroclaw.sh
